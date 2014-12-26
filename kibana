@@ -1,0 +1,80 @@
+#!/bin/sh
+#
+# /etc/init.d/kibana -- startup script for Kibana
+#
+# Written by Patrick Bamba
+#
+### BEGIN INIT INFO
+# Provides:          kibana
+# Description:        Starts kibana as a daemon.
+### END INIT INFO
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+NAME=kibana
+DESC="Kibana Dashboard"
+PID_FILE=/var/run/$NAME.pid
+KIBANA_LOG_FILE=/var/log/$NAME.log
+DAEMON=
+
+if [ `id -u` -ne 0 ]; then
+	echo "You need root privileges to run this script"
+	exit 1
+fi
+
+. /lib/lsb/init-functions
+
+start_service () {
+	log_daemon_msg "Starting $DESC"
+
+	pid=`pidofproc -p $PID_FILE`
+	if [ -n "$pid" ] ; then
+		log_begin_msg "$DESC is already running."
+		log_end_msg 0
+		exit 0
+	fi
+
+	$DAEMON > $KIBANA_LOG_FILE 2>&1 &
+	echo $! > $PID_FILE
+	return 0
+}
+
+stop_service () {
+	log_daemon_msg "Stopping $DESC"
+
+	if [ -f "$PID_FILE" ]; then 
+		start-stop-daemon --stop --pidfile "$PID_FILE" \
+			--retry=TERM/20/KILL/5 >/dev/null
+		if [ $? -eq 1 ]; then
+			log_progress_msg "$DESC is not running but pid file exists, cleaning up"
+		elif [ $? -eq 3 ]; then
+			PID="`cat $PID_FILE`"
+			log_failure_msg "Failed to stop $DESC (pid $PID)"
+			exit 1
+		fi
+		rm -f "$PID_FILE"
+	else
+		log_progress_msg "$DESC is not running"
+	fi
+	log_end_msg 0
+}
+
+case "$1" in
+	start|stop)
+		${1}_service
+	    ;;
+
+	restart|reload|force-reload)
+        stop_service
+        start_service
+    	;;
+
+	status)
+        status_of_proc -p $PID_FILE kibana kibana && exit 0 || exit $?
+	    ;;
+	*)
+        echo "Usage: service $NAME {start|stop|restart|reload|force-reload|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
